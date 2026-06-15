@@ -176,5 +176,65 @@ export function createWebhookRouter(callManager: ICallManager): Router {
     }
   });
 
+  /**
+   * POST /api/webhooks/vapi (root)
+   *
+   * Handles ALL Vapi webhook events in their native format.
+   * Vapi sends { message: { type: "tool-calls", toolCalls: [...] } }
+   * This is the main entry point Vapi uses for server-side tool execution.
+   */
+  router.post('/vapi', async (req: Request, res: Response) => {
+    try {
+      const { message } = req.body;
+
+      if (!message) {
+        res.status(400).json({ error: 'Missing message field' });
+        return;
+      }
+
+      // Handle tool-calls from Vapi
+      if (message.type === 'tool-calls') {
+        const toolCalls = message.toolCalls || message.toolCallList || [];
+        const results = [];
+
+        for (const toolCall of toolCalls) {
+          const toolName = toolCall.function?.name;
+          const parameters = toolCall.function?.arguments || {};
+          const toolCallId = toolCall.id;
+
+          if (!toolName) continue;
+
+          const event: VapiToolCallEvent = {
+            callId: toolCallId || `call_${Date.now()}`,
+            toolName,
+            parameters,
+            timestamp: new Date(message.timestamp || Date.now()).toISOString(),
+          };
+
+          const result = await callManager.handleToolCall(event);
+
+          results.push({
+            toolCallId,
+            result: result.success
+              ? JSON.stringify(result.data)
+              : JSON.stringify({ error: result.error || 'Tool call failed' }),
+          });
+        }
+
+        // Vapi expects { results: [{ toolCallId, result }] }
+        res.status(200).json({ results });
+        return;
+      }
+
+      // Handle other message types (status-update, end-of-call-report, etc.)
+      console.log(`[Webhook] Received message type: ${message.type}`);
+      res.status(200).json({ ok: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[Webhook] vapi error:', message);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   return router;
 }
