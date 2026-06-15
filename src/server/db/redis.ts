@@ -25,15 +25,15 @@ const DEFAULT_CONFIG: RedisConfig = {
  * Creates a Redis client instance with the given configuration.
  * Supports REDIS_URL for hosted Redis (Render, Railway, etc.)
  */
-function createClient(config: RedisConfig = DEFAULT_CONFIG): Redis {
+function createClient(overrides?: Partial<RedisConfig>): Redis {
   const redisUrl = process.env.REDIS_URL;
   
   let client: Redis;
-  if (redisUrl && config === DEFAULT_CONFIG) {
+  if (redisUrl) {
     // Use connection URL if available (for hosted Redis)
     client = new Redis(redisUrl, {
-      keyPrefix: config.keyPrefix,
-      maxRetriesPerRequest: config.maxRetriesPerRequest,
+      keyPrefix: overrides?.keyPrefix !== undefined ? overrides.keyPrefix : DEFAULT_CONFIG.keyPrefix,
+      maxRetriesPerRequest: overrides?.maxRetriesPerRequest ?? DEFAULT_CONFIG.maxRetriesPerRequest,
       retryStrategy(times: number) {
         const delay = Math.min(times * 200, 5000);
         return delay;
@@ -41,6 +41,7 @@ function createClient(config: RedisConfig = DEFAULT_CONFIG): Redis {
       tls: redisUrl.startsWith('rediss://') ? {} : undefined,
     });
   } else {
+    const config = { ...DEFAULT_CONFIG, ...overrides };
     client = new Redis({
       host: config.host,
       port: config.port,
@@ -77,7 +78,6 @@ export const redisClient = createClient();
  * cannot issue other commands.
  */
 export const redisSubscriber = createClient({
-  ...DEFAULT_CONFIG,
   keyPrefix: undefined, // Pub/sub channels should not be prefixed
 });
 
@@ -85,7 +85,6 @@ export const redisSubscriber = createClient({
  * Dedicated Redis client for publishing events.
  */
 export const redisPublisher = createClient({
-  ...DEFAULT_CONFIG,
   keyPrefix: undefined,
 });
 
