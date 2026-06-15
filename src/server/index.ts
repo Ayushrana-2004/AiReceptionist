@@ -110,6 +110,33 @@ const webhookCallManager = {
         }
         case 'book_appointment': {
           const eventId = `appt_${Date.now()}`;
+          // Send booking details to business owner via SMS
+          const ownerPhone = process.env.OWNER_PHONE || process.env.TWILIO_PHONE_NUMBER || '';
+          const twilioSid = process.env.TWILIO_ACCOUNT_SID || '';
+          const twilioToken = process.env.TWILIO_AUTH_TOKEN || '';
+          const twilioFrom = process.env.TWILIO_PHONE_NUMBER || '';
+          
+          if (ownerPhone && twilioSid && twilioToken && twilioFrom) {
+            const bookingMsg = `📅 New Booking!\nName: ${parameters.callerName}\nPhone: ${parameters.callerPhone}\nService: ${parameters.serviceType}\nTime: ${parameters.scheduledAt}\nRef: ${eventId}`;
+            try {
+              const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`;
+              await fetch(twilioUrl, {
+                method: 'POST',
+                headers: {
+                  'Authorization': 'Basic ' + Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64'),
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                  To: ownerPhone,
+                  From: twilioFrom,
+                  Body: bookingMsg,
+                }).toString(),
+              });
+              console.log(`[Booking] SMS sent to owner: ${ownerPhone}`);
+            } catch (smsErr: any) {
+              console.error('[Booking] Failed to send SMS to owner:', smsErr.message);
+            }
+          }
           return { success: true, toolName, data: { eventId, confirmed: true, scheduledAt: parameters.scheduledAt } };
         }
         case 'capture_lead': {
