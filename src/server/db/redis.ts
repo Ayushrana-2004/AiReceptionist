@@ -27,13 +27,14 @@ const DEFAULT_CONFIG: RedisConfig = {
  */
 function createClient(overrides?: Partial<RedisConfig>): Redis {
   const redisUrl = process.env.REDIS_URL;
+  console.log('[Redis] REDIS_URL present:', !!redisUrl, redisUrl ? `(${redisUrl.substring(0, 20)}...)` : '(not set)');
   
   let client: Redis;
   if (redisUrl) {
     // Use connection URL if available (for hosted Redis)
     client = new Redis(redisUrl, {
       keyPrefix: overrides?.keyPrefix !== undefined ? overrides.keyPrefix : DEFAULT_CONFIG.keyPrefix,
-      maxRetriesPerRequest: overrides?.maxRetriesPerRequest ?? DEFAULT_CONFIG.maxRetriesPerRequest,
+      maxRetriesPerRequest: null,
       retryStrategy(times: number) {
         const delay = Math.min(times * 200, 5000);
         return delay;
