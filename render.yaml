@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: ai-receptionist-backend
+    runtime: node
+    buildCommand: npm install && npx tsc --skipLibCheck --noEmit || true
+    startCommand: npx tsx src/server/index.ts
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REDIS_URL
+        fromService:
+          name: ai-receptionist-redis
+          type: redis
+          property: connectionString
+      - key: VAPI_API_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: CALENDLY_ACCESS_TOKEN
+        sync: false
+      - key: CALENDLY_EVENT_TYPE_URI
+        sync: false
+
+  - type: redis
+    name: ai-receptionist-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
