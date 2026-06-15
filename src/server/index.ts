@@ -110,14 +110,26 @@ const webhookCallManager = {
         }
         case 'book_appointment': {
           const eventId = `appt_${Date.now()}`;
-          // Send booking details to business owner via SMS
-          const ownerPhone = process.env.OWNER_PHONE || process.env.TWILIO_PHONE_NUMBER || '';
           const twilioSid = process.env.TWILIO_ACCOUNT_SID || '';
           const twilioToken = process.env.TWILIO_AUTH_TOKEN || '';
           const twilioFrom = process.env.TWILIO_PHONE_NUMBER || '';
-          
+          const ownerPhone = process.env.OWNER_PHONE || '';
+
+          // Format time as AM/PM
+          const apptDate = new Date(parameters.scheduledAt);
+          const formattedTime = apptDate.toLocaleString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          });
+
+          // Send SMS to owner
           if (ownerPhone && twilioSid && twilioToken && twilioFrom) {
-            const bookingMsg = `📅 New Booking!\nName: ${parameters.callerName}\nPhone: ${parameters.callerPhone}\nService: ${parameters.serviceType}\nTime: ${parameters.scheduledAt}\nRef: ${eventId}`;
+            const ownerMsg = `📅 New Booking!\nName: ${parameters.callerName}\nPhone: ${parameters.callerPhone}\nService: ${parameters.serviceType}\nTime: ${formattedTime}\nRef: ${eventId}`;
             try {
               const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`;
               await fetch(twilioUrl, {
@@ -129,7 +141,7 @@ const webhookCallManager = {
                 body: new URLSearchParams({
                   To: ownerPhone,
                   From: twilioFrom,
-                  Body: bookingMsg,
+                  Body: ownerMsg,
                 }).toString(),
               });
               console.log(`[Booking] SMS sent to owner: ${ownerPhone}`);
@@ -137,7 +149,31 @@ const webhookCallManager = {
               console.error('[Booking] Failed to send SMS to owner:', smsErr.message);
             }
           }
-          return { success: true, toolName, data: { eventId, confirmed: true, scheduledAt: parameters.scheduledAt } };
+
+          // Send confirmation SMS to caller
+          if (parameters.callerPhone && twilioSid && twilioToken && twilioFrom) {
+            const callerMsg = `✅ Appointment Confirmed!\nService: ${parameters.serviceType}\nTime: ${formattedTime}\nWe look forward to seeing you!`;
+            try {
+              const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`;
+              await fetch(twilioUrl, {
+                method: 'POST',
+                headers: {
+                  'Authorization': 'Basic ' + Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64'),
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                  To: parameters.callerPhone,
+                  From: twilioFrom,
+                  Body: callerMsg,
+                }).toString(),
+              });
+              console.log(`[Booking] Confirmation SMS sent to caller: ${parameters.callerPhone}`);
+            } catch (smsErr: any) {
+              console.error('[Booking] Failed to send SMS to caller:', smsErr.message);
+            }
+          }
+
+          return { success: true, toolName, data: { eventId, confirmed: true, scheduledAt: formattedTime } };
         }
         case 'capture_lead': {
           return { success: true, toolName, data: { captured: true, ...parameters } };
